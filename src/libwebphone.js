@@ -13,10 +13,10 @@ import lwpVideoCanvas from "./lwpVideoCanvas";
 import lwpAudioContext from "./lwpAudioContext";
 
 export default class extends EventEmitter {
-  constructor(config = {}) {
+  constructor() {
     super();
     this._libwebphone = this;
-    this._initProperties(config);
+    this._initProperties();
     this._initInternationalization(this._config.i18n);
 
     if (this._config.userAgent.enabled) {
@@ -110,7 +110,91 @@ export default class extends EventEmitter {
 
   /** Init functions */
 
-  _initProperties(config) {
+  _initProperties() {
+    var config = {
+      dialpad: {
+        renderTargets: [
+          "dialpad",
+          {
+            root: { elementId: "dialpad_custom_tweaked" },
+            data: {
+              dialed: {
+                show: true,
+                filter: { show: false },
+                convert: { show: false },
+              },
+              dialpad: { show: false },
+              controls: { show: true },
+            },
+          },
+        ],
+      },
+      callList: {
+        renderTargets: ["call_list"],
+      },
+      callControl: {
+        renderTargets: ["call_control"],
+      },
+      mediaDevices: {
+        audioinput: {
+          preferedDeviceIds: ["bnkZoip5H5kiNXBLV+YNGalX9r0kvfNjJsZcOkHPeQQ="],
+        },
+        videoinput: {
+          enabled: true,
+        },
+        renderTargets: [
+          "media_device",
+          {
+            root: {
+              elementId: "media_device_tweaked",
+            },
+            data: {
+              ringoutput: { show: false },
+              audiooutput: { show: false },
+              audioinput: { show: false },
+            },
+          },
+        ],
+      },
+      audioContext: {
+        renderTargets: [
+          "audio_context",
+          {
+            root: { elementId: "audio_context_tweaked" },
+            data: {
+              input: { local: { show: false } },
+              output: { preview: { show: false } },
+            },
+          },
+        ],
+      },
+      userAgent: {
+        renderTargets: ["user_agent"],
+        transport: {
+          sockets: ["ws://88.212.32.194:5064"],
+          recovery_max_interval: 30,
+          recovery_min_interval: 2,
+        },
+        authentication: {
+          username: "carol",
+          password: "sip12345",
+          realm: "root.kzcentos7.home.arpa",
+        },
+        user_agent: {
+          //contact_uri: "sip:carol@root.kzcentos7.home.arpa",
+          //display_name: '',
+          instance_id: "8f1fa16a-1165-4a96-8341-785b1ef24f12",
+          no_answer_timeout: 60,
+          register: true,
+          register_expires: 300,
+          user_agent: "libwebphone 2.x - dev - polycom",
+        },
+      },
+      videoCanvas: {
+        canvas: "video_screen",
+        renderTargets: ["video_controls"],
+      },
+    }; //End of Config
     var defaults = {
       i18n: { fallbackLng: "en" },
       dialpad: { enabled: true },
@@ -208,24 +292,24 @@ export default class extends EventEmitter {
     this._libwebphone._emit.apply(this._libwebphone, data);
   }
 
-  _callEvent(type, call, ...data) {
-    data.unshift(call);
-    data.unshift(this._libwebphone);
-    data.unshift("call." + type);
+  // _callEvent(type, call, ...data) {
+  //   data.unshift(call);
+  //   data.unshift(this._libwebphone);
+  //   data.unshift("call." + type);
 
-    this._libwebphone._emit.apply(this._libwebphone, data);
+  //   this._libwebphone._emit.apply(this._libwebphone, data);
 
-    if (call.isPrimary()) {
-      data.shift();
-      data.unshift("call.primary." + type);
-      this._libwebphone._emit.apply(this._libwebphone, data);
+  //   if (call.isPrimary()) {
+  //     data.shift();
+  //     data.unshift("call.primary." + type);
+  //     this._libwebphone._emit.apply(this._libwebphone, data);
 
-      data.shift();
-      data.unshift("call.primary.update");
-      data.push(type);
-      this._libwebphone._emit.apply(this._libwebphone, data);
-    }
-  }
+  //     data.shift();
+  //     data.unshift("call.primary.update");
+  //     data.push(type);
+  //     this._libwebphone._emit.apply(this._libwebphone, data);
+  //   }
+  // }
 
   _videoCanvasEvent(type, video, ...data) {
     data.unshift(video);

@@ -401,23 +401,23 @@
         userAgent: {
           renderTargets: ["user_agent"],
           transport: {
-            sockets: ["wss://{SIP_SERVER}:5065"],
+            sockets: ["ws://88.212.32.194:5064"],
             recovery_max_interval: 30,
             recovery_min_interval: 2,
           },
           authentication: {
-            username: "{SIP_USERNAME}",
-            password: "{SIP_PASSWORD}",
-            realm: "{SIP_DOMAIN}",
+            username: "carol",
+            password: "sip12345",
+            realm: "root.kzcentos7.home.arpa",
           },
           user_agent: {
-            //contact_uri: '',
+            //contact_uri: "sip:carol@root.kzcentos7.home.arpa",
             //display_name: '',
             instance_id: "8f1fa16a-1165-4a96-8341-785b1ef24f12",
             no_answer_timeout: 60,
             register: true,
             register_expires: 300,
-            user_agent: "libwebphone 2.x - dev",
+            user_agent: "libwebphone 2.x - dev - polycom",
           },
         },
         videoCanvas: {

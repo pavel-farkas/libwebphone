@@ -86,6 +86,31 @@ export default class extends lwpRenderer {
     }
   }
 
+  transferBlind() {
+    const currentCall = this._getCall();
+    if (currentCall) {
+      const dialpad = this._libwebphone.getDialpad();
+      if (dialpad) {
+        const target = dialpad.getTarget(true);
+        currentCall.transfer(target);
+      }
+    }
+  }
+
+  transferAttended() {
+    const currentCall = this._getCall();
+    if (currentCall) {
+      const dialpad = this._libwebphone.getDialpad();
+      if (dialpad) {
+        const target = dialpad.getTarget(true);
+        const userAgent = this._libwebphone.getUserAgent();
+        if (userAgent) {
+          userAgent.call(target, [], false, {lwpTransfereeCall: currentCall});
+        }
+      }
+    }
+  }
+
   answer() {
     const currentCall = this._getCall();
     if (currentCall) {
@@ -128,8 +153,9 @@ export default class extends lwpRenderer {
         unmute: "Unmute Audio",
         muteVideo: "Mute Video",
         unmuteVideo: "Unmute Video",
-        transferblind: "Blind Transfer",
-        transferattended: "Attended Transfer",
+        transfer: "Transfer Call",
+        transferBlind: "Blind Transfer",
+        transferAttended: "Attended Transfer",
         transfercomplete: "Transfer (complete)",
       },
     };
@@ -186,6 +212,17 @@ export default class extends lwpRenderer {
     this._libwebphone.on("userAgent.call.failed", () => {
       this.updateRenders();
     });
+    this._libwebphone.on("call.established", (lwp, call) => {
+      const data = call.getSessionUserData();
+      if (data && data.lwpTransfereeCall) {
+        const transfereeCall = data.lwpTransfereeCall;
+        transfereeCall.addSessionUserData({lwpTransferTargetCall: call});
+        delay(3000).then(() => {
+          transfereeCall.transfer(call)
+        });
+      }
+      this.updateRenders(call);
+    });
   }
 
   _initRenderTargets() {
@@ -211,8 +248,9 @@ export default class extends lwpRenderer {
         muteVideo: "libwebphone:callControl.muteVideo",
         unmuteVideo: "libwebphone:callControl.unmuteVideo",
         transfercomplete: "libwebphone:callControl.transfercomplete",
-        transferblind: "libwebphone:callControl.transferblind",
-        transferattended: "libwebphone:callControl.transferattended",
+        transfer: "libwebphone:callControl.transfer",
+        transferBlind: "libwebphone:callControl.transferBlind",
+        transferAttended: "libwebphone:callControl.transferAttended",
       },
       data: lwpUtils.merge({}, this._config, this._renderData()),
       by_id: {
@@ -304,6 +342,20 @@ export default class extends lwpRenderer {
             },
           },
         },
+        transferBlind: {
+          events: {
+            onclick: () => {
+              this.transferBlind();
+            },
+          },
+        },
+        transferAttended: {
+          events: {
+            onclick: () => {
+              this.transferAttended();
+            },
+          },
+        },
         answer: {
           events: {
             onclick: (event) => {
@@ -376,15 +428,20 @@ export default class extends lwpRenderer {
             </button>
           {{/data.call.isVideoMuted}}
 
-          <button id="{{by_id.transfer.elementId}}">
-            {{^data.call.inTransfer}}
-              {{i18n.transferblind}}
-            {{/data.call.inTransfer}}
+          {{^data.call.inTransfer}}
+            <button id="{{by_id.transfer.elementId}}">
+              {{i18n.transfer}}
+            </button>
+          {{/data.call.inTransfer}}
 
-            {{#data.call.inTransfer}}
-              {{i18n.transfercomplete}}
-            {{/data.call.inTransfer}}
-          </button>
+          {{#data.call.inTransfer}}
+            <button id="{{by_id.transferBlind.elementId}}">
+              {{i18n.transferBlind}}
+            </button>
+            <button id="{{by_id.transferAttended.elementId}}">
+              {{i18n.transferAttended}}
+            </button>
+          {{/data.call.inTransfer}}
         {{/data.call.established}}
 
         {{#data.call.terminating}}
@@ -418,4 +475,8 @@ export default class extends lwpRenderer {
   _getCall() {
     return this._call;
   }
+}
+
+function delay(time) {
+  return new Promise(resolve => setTimeout(resolve, time));
 }

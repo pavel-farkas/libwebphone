@@ -6,59 +6,61 @@ import lwpUtils from "./lwpUtils";
 import lwpRenderer from "./lwpRenderer";
 import lwpCall from "./lwpCall";
 
-export default class extends lwpRenderer {
+export default class lwpUserAgent extends lwpRenderer {
+  #config = {};
+  #userAgent = null;
+  #sockets = [];
   constructor(libwebphone, config = {}) {
     super(libwebphone);
-    this._libwebphone = libwebphone;
-    this._emit = this._libwebphone._userAgentEvent;
-    this._initProperties(config);
+    // this._libwebphone = "kakac";
+    // this._emit = this._libwebphone._userAgentEvent;
+    this.#initProperties(config);
     this._initInternationalization(config.i18n || {});
-    this._initSockets();
-    this._initEventBindings();
-    this._initRenderTargets();
+    this.#initSockets();
+    this.#initEventBindings();
+    this.#initRenderTargets();
     this._emit("created", this);
-    this.initAgent = this._initAgent.bind(this);
-    return this;
+    // this.initAgent = this._initAgent.bind(this);
+    //return this;
   }
-
   start(username = null, password = null, realm = null) {
     if (this.isStarted()) {
       return;
     }
 
     if (username) {
-      this._config.authentication.username = username;
+      this.#config.authentication.username = username;
     }
 
     if (password) {
-      this._config.authentication.password = password;
+      this.#config.authentication.password = password;
     }
 
     if (realm) {
-      this._config.authentication.realm = realm;
+      this.#config.authentication.realm = realm;
     }
 
     try {
       const config = {
-        sockets: this._sockets,
+        sockets: this.#sockets,
         uri: "webphone@nodomain.invalid",
-        connection_recovery_max_interval: this._config.transport
+        connection_recovery_max_interval: this.#config.transport
           .recovery_max_interval,
-        connection_recovery_min_interval: this._config.transport
+        connection_recovery_min_interval: this.#config.transport
           .recovery_min_interval,
-        contact_uri: this._config.user_agent.contact_uri,
-        display_name: this._config.user_agent.display_name,
-        instance_id: this._config.user_agent.instance_id,
-        no_answer_timeout: this._config.user_agent.no_answer_timeout,
-        realm: this._config.authentication.realm,
-        register: this._config.user_agent.register,
-        register_expires: this._config.user_agent.register_expires,
-        user_agent: this._config.user_agent.user_agent,
+        contact_uri: this.#config.user_agent.contact_uri,
+        display_name: this.#config.user_agent.display_name,
+        instance_id: this.#config.user_agent.instance_id,
+        no_answer_timeout: this.#config.user_agent.no_answer_timeout,
+        realm: this.#config.authentication.realm,
+        register: this.#config.user_agent.register,
+        register_expires: this.#config.user_agent.register_expires,
+        user_agent: this.#config.user_agent.user_agent,
         session_timers: false,
       };
 
-      if (this._config.authentication.jwt) {
-        config.authorization_jwt = this._config.authentication.jwt;
+      if (this.#config.authentication.jwt) {
+        config.authorization_jwt = this.#config.authentication.jwt;
         const decoded = jwtDecode(config.authorization_jwt);
         if (decoded["SIP-Info"] && decoded["SIP-Info"]["User-Agent"]) {
           const jwt_user_agent = decoded["SIP-Info"]["User-Agent"];
@@ -69,16 +71,16 @@ export default class extends lwpRenderer {
             config.realm = jwt_user_agent.Realm;
           }
         }
-      } else if (this._config.authentication.password) {
-        config.password = this._config.authentication.password;
+      } else if (this.#config.authentication.password) {
+        config.password = this.#config.authentication.password;
       }
 
-      if (this._config.authentication.username) {
-        config.authorization_user = this._config.authentication.username;
+      if (this.#config.authentication.username) {
+        config.authorization_user = this.#config.authentication.username;
       }
 
-      if (this._config.authentication.realm) {
-        config.realm = this._config.authentication.realm;
+      if (this.#config.authentication.realm) {
+        config.realm = this.#config.authentication.realm;
       }
 
       if (config.authorization_user) {
@@ -89,47 +91,49 @@ export default class extends lwpRenderer {
         config.uri = config.uri.split("@")[0] + "@" + config.realm;
       }
 
-      this.initAgent(config);
+      this.#initAgent(config);
 
-      this._userAgent.start();
+      this.#userAgent.start();
 
-      this._userAgent.on("connected", (...event) => {
+      this.#userAgent.on("connected", (...event) => {
         this.updateRenders();
         this._emit("connected", this, ...event);
       });
-      this._userAgent.on("disconnected", (...event) => {
+      this.#userAgent.on("disconnected", (...event) => {
         this.updateRenders();
         this._emit("disconnected", this, ...event);
       });
-      this._userAgent.on("registered", (...event) => {
+      this.#userAgent.on("registered", (...event) => {
+        this.#userAgent._contact.pub_gruu = null;
+        this.#userAgent._contact.temp_gruu = null;
         this.updateRenders();
         this._emit("registration.registered", this, ...event);
       });
-      this._userAgent.on("unregistered", (...event) => {
+      this.#userAgent.on("unregistered", (...event) => {
         this.updateRenders();
         this._emit("registration.unregistered", this, ...event);
       });
-      this._userAgent.on("registrationFailed", (...event) => {
+      this.#userAgent.on("registrationFailed", (...event) => {
         this.updateRenders();
         this._emit("registration.failed", this, ...event);
       });
-      this._userAgent.on("registrationExpiring", (...event) => {
+      this.#userAgent.on("registrationExpiring", (...event) => {
         this._emit("registration.expiring", this, ...event);
-        this._userAgent.register();
+        this.#userAgent.register();
       });
-      this._userAgent.on("newRTCSession", (...event) => {
+      this.#userAgent.on("newRTCSession", (...event) => {
         const session = event[0].session;
         new lwpCall(this._libwebphone, session);
       });
-      this._userAgent.on("newMessage", (...event) => {
+      this.#userAgent.on("newMessage", (...event) => {
         this._emit("received.message", this, ...event);
       });
-      this._userAgent.on("sipEvent", (...event) => {
+      this.#userAgent.on("sipEvent", (...event) => {
         this._emit("received.notify", this, ...event);
       });
 
       this._emit("started", this);
-      return this._userAgent;
+      return this.#userAgent;
     } catch (error) {
       this._emit("configuration.error", this, error);
     }
@@ -139,19 +143,19 @@ export default class extends lwpRenderer {
     if (this.isStarted()) {
       this.hangupAll();
       this.unregister();
-      this._userAgent.stop();
-      this._userAgent = null;
+      this.#userAgent.stop();
+      this.#userAgent = null;
       this._emit("stopped", this);
     }
   }
 
   isStarted() {
-    return this._userAgent != null;
+    return this.#userAgent != null;
   }
 
   isConnected() {
     if (this.isStarted()) {
-      return this._userAgent.isConnected();
+      return this.#userAgent.isConnected();
     }
 
     return false;
@@ -187,13 +191,13 @@ export default class extends lwpRenderer {
 
   register() {
     if (this.isStarted()) {
-      this._userAgent.register();
+      this.#userAgent.register();
     }
   }
 
   unregister() {
     if (this.isStarted()) {
-      this._userAgent.unregister({
+      this.#userAgent.unregister({
         all: true,
       });
     }
@@ -209,7 +213,7 @@ export default class extends lwpRenderer {
 
   isRegistered() {
     if (this.isStarted()) {
-      return this._userAgent.isRegistered();
+      return this.#userAgent.isRegistered();
     }
 
     return false;
@@ -237,10 +241,10 @@ export default class extends lwpRenderer {
     this._emit("redial.update", this, this._redialTarget);
   }
 
-  call(target = null, custom_headers = [], options = false) {
+  call(target = null, custom_headers = [], options = false, userData = {}) {
     let defaultOptions = {
-      data: { lwpStreamId: lwpUtils.uuid() },
-      extraHeaders: [...custom_headers, ...this._config.custom_headers.establish_call],
+      data: lwpUtils.merge(userData,{ lwpStreamId: lwpUtils.uuid() }),
+      extraHeaders: [...custom_headers, ...this.#config.custom_headers.establish_call],
     };
     if (typeof options === 'boolean') {
       defaultOptions.anonymous = options;
@@ -283,7 +287,7 @@ export default class extends lwpRenderer {
 
   hangupAll() {
     if (this.isStarted()) {
-      this._userAgent.terminateSessions();
+      this.#userAgent.terminateSessions();
     }
   }
 
@@ -323,7 +327,7 @@ export default class extends lwpRenderer {
     this._libwebphone.i18nAddResourceBundles("userAgent", resourceBundles);
   }
 
-  _initProperties(config) {
+  #initProperties(config) {
     const defaults = {
       transport: {
         sockets: [],
@@ -354,53 +358,50 @@ export default class extends lwpRenderer {
       debug: false,
     };
 
-    this._config = lwpUtils.merge(defaults, config);
+    this.#config = lwpUtils.merge(defaults, config);
 
-    this._sockets = [];
-    this._userAgent = null;
+    this.setRedial(this.#config.user_agent.redial);
 
-    this.setRedial(this._config.user_agent.redial);
-
-    if (this._config.debug) {
+    if (this.#config.debug) {
       this.startDebug();
     } else {
       this.stopDebug();
     }
   }
 
-  _initSockets() {
-    this._config.transport.sockets.forEach((socket) => {
+  #initSockets() {
+    this.#config.transport.sockets.forEach((socket) => {
       // TODO: handle when socket is an object with weights...
-      this._sockets.push(new JsSIP.WebSocketInterface(socket));
+      this.#sockets.push(new JsSIP.WebSocketInterface(socket));
     });
   }
 
-  _initAgent(config) {
-    this._userAgent = new JsSIP.UA(config);
-    this._userAgent.receiveRequest = (request) => {
+  #initAgent(config) {
+    this.#userAgent = new JsSIP.UA(config);
+    this.#userAgent.receiveRequest = (request) => {
       /** TODO: nasty hack because Kazoo appears to be lower-casing the request user... */
-      const config_user = this._userAgent._configuration.uri.user;
+      const config_user = this.#userAgent._configuration.uri.user;
       const ruri_user = request.ruri.user;
       if (config_user.toLowerCase() == ruri_user.toLowerCase()) {
         request.ruri.user = config_user;
       }
-      return this._userAgent.__proto__.receiveRequest.call(
-        this._userAgent,
+      return this.#userAgent.__proto__.receiveRequest.call(
+        this.#userAgent,
         request
       );
     };
 
-    if (this._config.custom_parameters.contact_uri) {
-      this._userAgent.registrator().setExtraContactParams(this._config.custom_parameters.contact_uri);
+    if (this.#config.custom_parameters.contact_uri) {
+      this.#userAgent.registrator().setExtraContactParams(this.#config.custom_parameters.contact_uri);
     }
 
-    if (this._config.custom_headers.register) {
-      this._userAgent.registrator().setExtraHeaders(this._config.custom_headers.register);
-      console.log(this._userAgent);
+    if (this.#config.custom_headers.register) {
+      this.#userAgent.registrator().setExtraHeaders(this.#config.custom_headers.register);
+      console.log(this.#userAgent);
     }
   }
 
-  _initEventBindings() {
+  #initEventBindings() {
     this._libwebphone.on("userAgent.debug.start", () => {
       this.updateRenders();
     });
@@ -417,8 +418,8 @@ export default class extends lwpRenderer {
     });
   }
 
-  _initRenderTargets() {
-    this._config.renderTargets.map((renderTarget) => {
+  #initRenderTargets() {
+    this.#config.renderTargets.map((renderTarget) => {
       return this.renderAddTarget(renderTarget);
     });
   }
@@ -441,7 +442,7 @@ export default class extends lwpRenderer {
         password: "libwebphone:userAgent.password",
         realm: "libwebphone:userAgent.realm",
       },
-      data: lwpUtils.merge({}, this._config, this._renderData()),
+      data: lwpUtils.merge({}, this.#config, this._renderData()),
       by_id: {
         debug: {
           events: {
@@ -465,7 +466,7 @@ export default class extends lwpRenderer {
           events: {
             onchange: (event) => {
               const element = event.srcElement;
-              this._config.authentication.username = element.value;
+              this.#config.authentication.username = element.value;
             },
           },
         },
@@ -473,7 +474,7 @@ export default class extends lwpRenderer {
           events: {
             onchange: (event) => {
               const element = event.srcElement;
-              this._config.authentication.password = element.value;
+              this.#config.authentication.password = element.value;
             },
           },
         },
@@ -481,7 +482,7 @@ export default class extends lwpRenderer {
           events: {
             onchange: (event) => {
               const element = event.srcElement;
-              this._config.authentication.realm = element.value;
+              this.#config.authentication.realm = element.value;
             },
           },
         },
@@ -598,7 +599,7 @@ export default class extends lwpRenderer {
         throw new Error("Webphone client not ready yet!");
       }
 
-      this._userAgent.call(target, options);
+      this.#userAgent.call(target, options);
 
       this._emit("call.started", this, target);
     } catch (error) {

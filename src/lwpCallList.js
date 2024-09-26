@@ -40,14 +40,14 @@ export default class extends lwpRenderer {
     } else {
       this._calls.map((call) => {
         if (call.isPrimary) {
-          call._clearPrimary();
+          call.clearPrimary();
         }
       });
 
       this._calls.push(newCall);
       this._emit("calls.added", this, newCall);
 
-      newCall._setPrimary();
+      newCall.setPrimary();
       this._emit("calls.changed", this, newCall, previousCall);
     }
   }
@@ -63,7 +63,7 @@ export default class extends lwpRenderer {
     });
 
     if (primaryCall) {
-      primaryCall._setPrimary();
+      primaryCall.setPrimary();
       if (primaryCall.hasSession()) {
         this._emit("calls.changed", this, primaryCall, previousCall);
       } else {
@@ -90,12 +90,12 @@ export default class extends lwpRenderer {
         this._emit("calls.changed", this, withSession, terminatedCall);
       } else {
         if (this._calls.length > 0) {
-          this._calls[0]._setPrimary();
+          this._calls[0].setPrimary();
           this._emit("calls.changed", this, null, terminatedCall);
         }
       }
 
-      terminatedCall._clearPrimary(false);
+      terminatedCall.clearPrimary(false);
     }
   }
 
@@ -128,7 +128,7 @@ export default class extends lwpRenderer {
     this._config = lwpUtils.merge(defaults, config);
 
     const newCall = new lwpCall(this._libwebphone);
-    newCall._setPrimary();
+    newCall.setPrimary();
     this._calls = [newCall];
   }
 

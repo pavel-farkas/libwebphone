@@ -4,12 +4,15 @@ import Mustache from "mustache";
 import lwpUtils from "./lwpUtils";
 
 export default class {
+  // #libwebphone;
   constructor(libwebphone) {
+    this._libwebphone = libwebphone;
+    this._emit = this._libwebphone._userAgentEvent;
     this._renders = [];
     this._windowLoaded = false;
     this._i18nReady = false;
     this._renderReady = false;
-    libwebphone.on("language.changed", () => {
+    this._libwebphone.on("language.changed", () => {
       this._i18nReady = true;
       if (this._windowLoaded && this._i18nReady) {
         this._renderReady = true;

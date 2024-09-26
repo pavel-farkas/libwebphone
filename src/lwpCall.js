@@ -4,71 +4,92 @@ import lwpUtils from "./lwpUtils";
 import prettyMilliseconds from "pretty-ms";
 
 export default class lwpCall {
+  #libwebphone;
+  #id;
+  #session;
+  #primary = false;
+  #inTransfer = false;
+  // #muteHint = false;
+  #config = {};
+  #streams = {};
+  #answerTime = null;
+
   constructor(libwebphone, session = null) {
-    this._libwebphone = libwebphone;
-    this._id = session
+    this.#libwebphone = libwebphone;
+    this.#id = session
       ? session.data.lwpStreamId || lwpUtils.uuid()
       : lwpUtils.uuid();
-    this._emit = this._libwebphone._callEvent;
-    this._session = session;
-    this._initProperties();
-    this._initEventBindings();
+    this.#session = session;
+    this.#initProperties();
+    this.#initEventBindings();
 
-    const callList = this._libwebphone.getCallList();
+    const callList = this.#libwebphone.getCallList();
     if (!callList) {
-      this._setPrimary();
+      this.setPrimary();
     }
 
-    this._emit("created", this);
+    this.#emit("created");
 
     if (session) {
-      this._timeUpdate();
+      this.#timeUpdate();
     }
   }
 
   getId() {
-    return this._id;
+    return this.#id;
   }
 
   hasSession() {
-    return this._session != null;
+    return this.#session != null;
+  }
+
+  getSessionUserData() {
+    if (this.hasSession()) {
+      return this.#session.data;
+    }
+  }
+  addSessionUserData(userData) {
+    if (this.hasSession()) {
+      this.#session.data = lwpUtils.merge(
+        this.#session.data,
+        userData
+      );
+    }
   }
 
   hasPeerConnection() {
-    const session = this._getSession();
-
-    return session && session.connection;
+    return this.#session && this.#session.connection;
   }
 
   getPeerConnection() {
     if (this.hasPeerConnection()) {
-      return this._getSession().connection;
+      return this.#session.connection;
     }
   }
 
   isPrimary() {
-    return this._primary;
+    return this.#primary;
   }
 
   getRemoteAudio() {
-    return this._streams.remote.elements.audio;
+    return this.#streams.remote.elements.audio;
   }
 
   getRemoteVideo() {
-    return this._streams.remote.elements.video;
+    return this.#streams.remote.elements.video;
   }
 
   getLocalAudio() {
-    return this._streams.local.elements.audio;
+    return this.#streams.local.elements.audio;
   }
 
   getLocalVideo() {
-    return this._streams.local.elements.video;
+    return this.#streams.local.elements.video;
   }
 
   isInProgress() {
     if (this.hasSession()) {
-      return this._getSession().isInProgress();
+      return this.#session.isInProgress();
     }
 
     return false;
@@ -76,7 +97,7 @@ export default class lwpCall {
 
   isEstablished() {
     if (this.hasSession()) {
-      return this._getSession().isEstablished();
+      return this.#session.isEstablished();
     }
 
     return false;
@@ -84,7 +105,7 @@ export default class lwpCall {
 
   isEnded() {
     if (this.hasSession()) {
-      return this._getSession().isEnded();
+      return this.#session.isEnded();
     }
 
     return false;
@@ -95,12 +116,12 @@ export default class lwpCall {
   }
 
   isInTransfer() {
-    return this._inTransfer;
+    return this.#inTransfer;
   }
 
   getDirection() {
     if (this.hasSession()) {
-      if (this._getSession().direction == "incoming") {
+      if (this.#session.direction == "incoming") {
         return "terminating";
       } else {
         return "originating";
@@ -111,7 +132,7 @@ export default class lwpCall {
   }
 
   localIdentity(details = false) {
-    const session = this._getSession();
+    const session = this.#session;
     if (session) {
       if (details) {
         return session.local_identity;
@@ -128,7 +149,7 @@ export default class lwpCall {
   }
 
   remoteIdentity(details = false) {
-    const session = this._getSession();
+    const session = this.#session;
     if (session) {
       if (details) {
         return session.remote_identity;
@@ -145,7 +166,7 @@ export default class lwpCall {
   }
 
   remoteURIUser() { 
-    const session = this._getSession();
+    const session = this.#session;
     if (session) {
       return session._dialog._remote_uri.user;
     }
@@ -163,19 +184,19 @@ export default class lwpCall {
 
   cancel() {
     if (this.hasSession()) {
-      this._getSession().terminate();
+      this.#session.terminate();
     }
   }
 
   hangup() {
     if (this.hasSession()) {
-      this._getSession().terminate();
+      this.#session.terminate();
     }
   }
 
   hold() {
     if (this.hasSession()) {
-      this._getSession().hold();
+      this.#session.hold();
     }
   }
 
@@ -183,7 +204,7 @@ export default class lwpCall {
     let status = { local: false, remote: false };
 
     if (this.hasSession()) {
-      status = this._getSession().isOnHold();
+      status = this.#session.isOnHold();
     }
 
     if (details) {
@@ -195,8 +216,8 @@ export default class lwpCall {
 
   unhold() {
     if (this.hasSession()) {
-      this._getSession().unhold();
-      this._updateStreams();
+      this.#session.unhold();
+      this.#updateStreams();
     }
   }
 
@@ -205,7 +226,7 @@ export default class lwpCall {
    */
   mute(options = { audio: true, video: true }) {
     if (this.hasSession()) {
-      this._getSession().mute(options);
+      this.#session.mute(options);
     }
   }
 
@@ -214,7 +235,7 @@ export default class lwpCall {
    */
   unmute(options = { audio: true, video: true }) {
     if (this.hasSession()) {
-      this._getSession().unmute(options);
+      this.#session.unmute(options);
     }
   }
 
@@ -222,7 +243,7 @@ export default class lwpCall {
     let status = { audio: false, video: false };
 
     if (this.hasSession()) {
-      status = this._getSession().isMuted();
+      status = this.#session.isMuted();
     }
 
     if (details) {
@@ -235,44 +256,44 @@ export default class lwpCall {
   transfer(target = null, autoHold = true) {
     if (this.hasSession()) {
       if (this.isInTransfer() || target) {
-        const dialpad = this._libwebphone.getDialpad();
+        const dialpad = this.#libwebphone.getDialpad();
 
-        this._inTransfer = false;
+        this.#inTransfer = false;
 
         if (!target && dialpad) {
           target = dialpad.getTarget(true);
         }
 
         if (target && target instanceof lwpCall) {
-            const aor = target._getSession().remote_identity.uri.toAor();
-            this._getSession().refer(aor, {'replaces': target._getSession()});
-            this._emit("transfer.complete", this, target);
+          const aor = target.getSession().remote_identity.uri.toAor();
+          this.#session.refer(aor, {'replaces': target.getSession()});
+           this.#emit("transfer.complete", target);
         } else if (target) {
-          this._getSession().refer(target);
-          this._emit("transfer.started", this, target);
+          this.#session.refer(target);
+          this.#emit("transfer.started", target);
         } else {
           if (autoHold) {
             this.unhold();
           }
-          this._emit("transfer.failed", this, target);
+          this.#emit("transfer.failed", target);
         }
-        
-        this._emit("transfer.complete", this, target);
+
+        this.#emit("transfer.complete", target);
       } else {
-        this._inTransfer = true;
+        this.#inTransfer = true;
 
         if (autoHold) {
           this.hold();
         }
 
-        this._emit("transfer.collecting", this);
+        this.#emit("transfer.collecting");
       }
     }
   }
 
   answer() {
     if (this.hasSession()) {
-      const mediaDevices = this._libwebphone.getMediaDevices();
+      const mediaDevices = this.#libwebphone.getMediaDevices();
 
       if (mediaDevices) {
         mediaDevices.startStreams(this.getId()).then((streams) => {
@@ -283,45 +304,45 @@ export default class lwpCall {
             ]
           };
 
-          if (this._libwebphone._config.userAgent && this._libwebphone._config.userAgent.user_agent && this._libwebphone._config.userAgent.user_agent.user_agent) {
-            options.extraHeaders.push("User-Agent: " + this._libwebphone._config.userAgent.user_agent.user_agent);
+          if (this.#libwebphone._config.userAgent && this.#libwebphone._config.userAgent.user_agent && this.#libwebphone._config.userAgent.user_agent.user_agent) {
+            options.extraHeaders.push("User-Agent: " + this.#libwebphone._config.userAgent.user_agent.user_agent);
           }
 
-          this._getSession().answer(options);
-          this._emit("answered", this);
+          this.#session.answer(options);
+          this.#emit("answered");
         });
       } else {
-        this._getSession().answer({});
-        this._emit("answered", this);
+        this.#session.answer({});
+        this.#emit("answered");
       }
     }
   }
 
   reject() {
     if (this.hasSession()) {
-      this._getSession().terminate();
-      this._emit("rejected", this);
+      this.#session.terminate();
+      this.#emit("rejected");
     }
   }
 
   renegotiate() {
     if (this.hasSession() && !this.isOnHold()) {
-      this._getSession().renegotiate();
-      this._updateStreams();
-      this._emit("renegotiated", this);
+      this.#session.renegotiate();
+      this.#updateStreams();
+      this.#emit("renegotiated");
     }
   }
 
   sendDTMF(signal, options) {
     if (this.hasSession()) {
-      this._getSession().sendDTMF(signal, options);
-      this._emit("send.dtmf", this, signal, options);
+      this.#session.sendDTMF(signal, options);
+      this.#emit("send.dtmf", signal, options);
     }
   }
 
   changeVolume(volume = null, kind = null) {
-    if (volume === null && this._libwebphone.getAudioContext()) {
-      volume = this._libwebphone
+    if (volume === null && this.#libwebphone.getAudioContext()) {
+      volume = this.#libwebphone
         .getAudioContext()
         .getVolume("remote", { scale: false, relativeToMaster: true });
     }
@@ -339,13 +360,13 @@ export default class lwpCall {
     }
 
     if (kind) {
-      const element = this._streams.remote.elements[kind];
+      const element = this.#streams.remote.elements[kind];
       if (element) {
         element.volume = volume;
       }
     } else {
-      Object.keys(this._streams.remote.elements).forEach((kind) => {
-        const element = this._streams.remote.elements[kind];
+      Object.keys(this.#streams.remote.elements).forEach((kind) => {
+        const element = this.#streams.remote.elements[kind];
         if (element) {
           element.volume = volume;
         }
@@ -436,7 +457,7 @@ export default class lwpCall {
 
   /** Init functions */
 
-  _initMediaElement(elementKind, deviceKind) {
+  #initMediaElement(elementKind, deviceKind) {
     const element = document.createElement(elementKind);
 
     if (elementKind === "video") {
@@ -444,12 +465,12 @@ export default class lwpCall {
         element.setAttribute('webkit-playsinline', 'webkit-playsinline');
         element.setAttribute('playsinline', 'playsinline');
       } catch (error) {
-        this._emit("error", error);
+        this.#emit("error", error);
       }
     }
 
     if (this.hasSession() && element.setSinkId !== undefined) {
-      const preferedDevice = this._libwebphone
+      const preferedDevice = this.#libwebphone
         .getMediaDevices()
         .getPreferedDevice(deviceKind);
 
@@ -457,7 +478,7 @@ export default class lwpCall {
         try {
           element.setSinkId(preferedDevice.id);
         } catch (error) {
-         this._emit("error", error);
+         this.#emit("error", error);
         }
       }
     }
@@ -465,16 +486,11 @@ export default class lwpCall {
     return element;
   }
 
-  _initProperties() {
-    this._primary = false;
+  #initProperties() {
 
-    this._inTransfer = false;
+    this.#config = this.#libwebphone._config.call;
 
-    this._muteHint = false;
-
-    this._config = this._libwebphone._config.call;
-
-    this._streams = {
+    this.#streams = {
       remote: {
         mediaStream: new MediaStream(),
         kinds: {
@@ -482,8 +498,8 @@ export default class lwpCall {
           video: false,
         },
         elements: {
-          audio: this._initMediaElement("audio", "audiooutput"),
-          video: this._initMediaElement("video", "videoinput"),
+          audio: this.#initMediaElement("audio", "audiooutput"),
+          video: this.#initMediaElement("video", "videoinput"),
         },
       },
       local: {
@@ -493,28 +509,27 @@ export default class lwpCall {
           video: false,
         },
         elements: {
-          audio: this._initMediaElement("audio", "audiooutput"),
-          video: this._initMediaElement("video", "videoinput"),
+          audio: this.#initMediaElement("audio", "audiooutput"),
+          video: this.#initMediaElement("video", "videoinput"),
         },
       },
     };
 
-    Object.keys(this._streams).forEach((type) => {
-      Object.keys(this._streams[type].elements).forEach((kind) => {
-        const element = this._streams[type].elements[kind];
+    Object.keys(this.#streams).forEach((type) => {
+      Object.keys(this.#streams[type].elements).forEach((kind) => {
+        const element = this.#streams[type].elements[kind];
 
         lwpUtils.mediaElementEvents().forEach((eventName) => {
           element.addEventListener(eventName, (event) => {
-            this._emit(
+            this.#emit(
               type + "." + kind + "." + eventName,
-              this,
               element,
               event
             );
           });
         });
 
-        if (this._config.useAudioContext) {
+        if (this.#config.useAudioContext) {
           element.muted = true;
         } else {
           // NOTE: don't mute the remote audio by default
@@ -522,17 +537,17 @@ export default class lwpCall {
         }
         element.preload = "none";
 
-        this._emit(type + "." + kind + ".element", this, element);
+        this.#emit(type + "." + kind + ".element", element);
       });
     });
 
     if (this.isRinging()) {
-      this._emit("ringing.started", this);
+      this.#emit("ringing.started");
     }
   }
 
-  _initEventBindings() {
-    this._libwebphone.on(
+  #initEventBindings() {
+    this.#libwebphone.on(
       "mediaDevices.audio.input.changed",
       (lwp, mediaDevices, newTrack) => {
         if (this.hasSession()) {
@@ -544,7 +559,7 @@ export default class lwpCall {
         }
       }
     );
-    this._libwebphone.on(
+    this.#libwebphone.on(
       "mediaDevices.video.input.changed",
       (lwp, mediaDevices, newTrack) => {
         if (this.hasSession() && newTrack) {
@@ -552,106 +567,106 @@ export default class lwpCall {
         }
       }
     );
-    this._libwebphone.on(
+    this.#libwebphone.on(
       "mediaDevices.audio.output.changed",
       (lwp, mediaDevices, preferedDevice) => {
-        Object.keys(this._streams.remote.elements).forEach((kind) => {
-          const element = this._streams.remote.elements[kind];
+        Object.keys(this.#streams.remote.elements).forEach((kind) => {
+          const element = this.#streams.remote.elements[kind];
           if (element && element.setSinkId !== undefined) {
             try {
               element.setSinkId(preferedDevice.id);
             } catch (error) {
-              this._emit("error", error);
+              this.#emit("error", error);
             }
           }
         });
       }
     );
 
-    this._libwebphone.on("audioContext.channel.master.volume", () => {
+    this.#libwebphone.on("audioContext.channel.master.volume", () => {
       this.changeVolume();
     });
-    this._libwebphone.on("audioContext.channel.remote.volume", () => {
+    this.#libwebphone.on("audioContext.channel.remote.volume", () => {
       this.changeVolume();
     });
 
     if (this.hasPeerConnection()) {
       const peerConnection = this.getPeerConnection();
-      this._emit("peerconnection", this, peerConnection);
+      this.#emit("peerconnection", peerConnection);
       peerConnection.addEventListener("track", (...event) => {
-        this._emit("peerconnection.add.track", this, ...event);
-        this._updateStreams();
+        this.#emit("peerconnection.add.track", ...event);
+        this.#updateStreams();
       });
       peerConnection.addEventListener("removestream", (...event) => {
-        this._emit("peerconnection.remove.track", this, ...event);
-        this._updateStreams();
+        this.#emit("peerconnection.remove.track", ...event);
+        this.#updateStreams();
       });
     }
     if (this.hasSession()) {
-      this._getSession().on("progress", (...event) => {
-        this._emit("progress", this, ...event);
+      this.#session.on("progress", (...event) => {
+        this.#emit("progress", ...event);
       });
-      this._getSession().on("connecting", () => {
+      this.#session.on("connecting", () => {
         // Mute video and audio after the local media stream is added into RTCSession
-        this._getSession().mute({
-          audio: this._config.startWithAudioMuted,
-          video: this._config.startWithVideoMuted,
+        this.#session.mute({
+          audio: this.#config.startWithAudioMuted,
+          video: this.#config.startWithVideoMuted,
         });
       });
-      this._getSession().on("confirmed", (...event) => {
-        this._answerTime = new Date();
-        this._emit("ringing.stopped", this);
-        this._emit("established", this, ...event);
+      this.#session.on("confirmed", (...event) => {
+        this.#answerTime = new Date();
+        this.#emit("ringing.stopped");
+        this.#emit("established", ...event);
       });
-      this._getSession().on("newDTMF", (...event) => {
-        this._emit("receive.dtmf", this, ...event);
+      this.#session.on("newDTMF", (...event) => {
+        this.#emit("receive.dtmf", ...event);
       });
-      this._getSession().on("newInfo", (...event) => {
-        this._emit("receive.info", this, ...event);
+      this.#session.on("newInfo", (...event) => {
+        this.#emit("receive.info", ...event);
       });
-      this._getSession().on("hold", (...event) => {
-        this._emit("hold", this, ...event);
+      this.#session.on("hold", (...event) => {
+        this.#emit("hold", ...event);
       });
-      this._getSession().on("unhold", (...event) => {
-        this._emit("unhold", this, ...event);
+      this.#session.on("unhold", (...event) => {
+        this.#emit("unhold", ...event);
       });
-      this._getSession().on("muted", (...event) => {
-        this._emit("muted", this, ...event);
+      this.#session.on("muted", (...event) => {
+        this.#emit("muted", ...event);
       });
-      this._getSession().on("unmuted", (...event) => {
-        this._emit("unmuted", this, ...event);
+      this.#session.on("unmuted", (...event) => {
+        this.#emit("unmuted", ...event);
       });
-      this._getSession().on("update", (...event) => {
+      this.#session.on("update", (...event) => {
         const request = event[0].request || null;
-        const session = this._getSession();
+        const session = this.#session;
         if (request && session && request.method === "UPDATE" && request.from) {
           session.remote_identity.display_name = request.from._display_name;
           session.remote_identity.uri.user = request.from._uri;
         }
-        this._emit("update", this, ...event);
+        this.#emit("update", ...event);
       });
-      this._getSession().on("ended", (...event) => {
-        this._destroyCall();
-        this._emit("ended", this, ...event);
+      this.#session.on("ended", (...event) => {
+        this.#destroyCall();
+        this.#emit("ended", ...event);
       });
-      this._getSession().on("failed", (...event) => {
-        this._destroyCall();
-        this._emit("failed", this, ...event);
+      this.#session.on("failed", (...event) => {
+        this.#destroyCall();
+        this.#emit("failed", ...event);
       });
-      this._getSession().on("peerconnection", (...data) => {
+      this.#session.on("peerconnection", (...data) => {
         const peerConnection = data[0].peerconnection;
-        this._emit("peerconnection", this, peerConnection);
+        this.#emit("peerconnection", peerConnection);
         peerConnection.addEventListener("track", (...event) => {
-          this._emit("peerconnection.add.track", this, ...event);
-          this._updateStreams();
+          this.#emit("peerconnection.add.track", ...event);
+          this.#updateStreams();
         });
         peerConnection.addEventListener("remotestream", (...event) => {
-          this._emit("peerconnection.remove.track", this, ...event);
-          this._updateStreams();
+          this.#emit("peerconnection.remove.track", ...event);
+          this.#updateStreams();
         });
       });
 
-      if (this._config.globalKeyShortcuts) {
+      if (this.#config.globalKeyShortcuts) {
         document.addEventListener("keydown", (event) => {
           if (
             event.target != document.body ||
@@ -663,8 +678,8 @@ export default class lwpCall {
 
           switch (event.key) {
             case " ":
-              if (this._config.keys["spacebar"].enabled) {
-                this._config.keys["spacebar"].action(event, this);
+              if (this.#config.keys["spacebar"].enabled) {
+                this.#config.keys["spacebar"].action(event, this);
               }
               break;
           }
@@ -680,8 +695,8 @@ export default class lwpCall {
 
           switch (event.key) {
             case " ":
-              if (this._config.keys["spacebar"].enabled) {
-                this._config.keys["spacebar"].action(event, this);
+              if (this.#config.keys["spacebar"].enabled) {
+                this.#config.keys["spacebar"].action(event, this);
               }
               break;
           }
@@ -691,17 +706,16 @@ export default class lwpCall {
   }
 
   /** Helper functions */
-  _timeUpdate() {
-    if (this._answerTime) {
-      const duration = new Date() - this._answerTime;
+  #timeUpdate() {
+    if (this.#answerTime) {
+      const duration = new Date() - this.#answerTime;
       const options = {
         secondsDecimalDigits: 0,
       };
 
-      this._emit(
+      this.#emit(
         "timeupdate",
-        this,
-        this._answerTime,
+        this.#answerTime,
         duration,
         prettyMilliseconds(Math.ceil(duration / 1000) * 1000, options)
       );
@@ -709,28 +723,28 @@ export default class lwpCall {
 
     if (this.hasSession()) {
       setTimeout(() => {
-        this._timeUpdate();
+        this.#timeUpdate();
       }, 100);
     }
   }
 
-  _destroyCall() {
-    this._emit("terminated", this);
+  #destroyCall() {
+    this.#emit("terminated");
 
     if (this.isPrimary()) {
-      this._clearPrimary(false);
+      this.clearPrimary(false);
     }
 
-    this._destroyStreams();
+    this.#destroyStreams();
 
-    this._session = null;
+    this.#session = null;
   }
 
-  _getSession() {
-    return this._session;
+  getSession() {
+    return this.#session;
   }
 
-  _setPrimary(resume = true) {
+  setPrimary(resume = true) {
     if (this.isPrimary()) {
       return;
     }
@@ -739,39 +753,39 @@ export default class lwpCall {
       this.unhold();
     }
 
-    this._emit("promoted", this);
+    this.#emit("promoted");
 
-    this._primary = true;
+    this.#primary = true;
 
-    this._connectStreams();
+    this.#connectStreams();
   }
 
-  _clearPrimary(pause = true) {
+  clearPrimary(pause = true) {
     if (!this.isPrimary()) {
       return;
     }
 
     if (this.isInTransfer()) {
-      this._inTransfer = false;
+      this.#inTransfer = false;
 
-      this._emit("transfer.failed", this);
+      this.#emit("transfer.failed");
     }
 
-    this._primary = false;
+    this.#primary = false;
 
     if (pause && this.isEstablished() && !this.isOnHold()) {
       this.hold();
     }
 
-    this._disconnectStreams();
+    this.#disconnectStreams();
 
-    this._emit("demoted", this);
+    this.#emit("demoted");
   }
 
-  _updateStreams() {
-    Object.keys(this._streams).forEach((type) => {
+  #updateStreams() {
+    Object.keys(this.#streams).forEach((type) => {
       const peerConnection = this.getPeerConnection();
-      const mediaStream = this._streams[type].mediaStream;
+      const mediaStream = this.#streams[type].mediaStream;
       if (peerConnection) {
         const peerTracks = [];
         switch (type) {
@@ -792,23 +806,23 @@ export default class lwpCall {
             });
             break;
         }
-        this._syncTracks(mediaStream, peerTracks, type);
+        this.#syncTracks(mediaStream, peerTracks, type);
       }
 
-      Object.keys(this._streams[type].elements).forEach((kind) => {
-        const element = this._streams[type].elements[kind];
+      Object.keys(this.#streams[type].elements).forEach((kind) => {
+        const element = this.#streams[type].elements[kind];
         if (element) {
           const track = mediaStream.getTracks().find((track) => {
             return track.kind == kind;
           });
 
           if (track) {
-            this._streams[type].kinds[kind] = true;
+            this.#streams[type].kinds[kind] = true;
             if (!element.srcObject || element.srcObject.id != mediaStream.id) {
               element.srcObject = mediaStream;
             }
           } else {
-            this._streams[type].kinds[kind] = false;
+            this.#streams[type].kinds[kind] = false;
             element.srcObject = null;
           }
         }
@@ -816,7 +830,7 @@ export default class lwpCall {
     });
   }
 
-  _syncTracks(mediaStream, peerTracks, type) {
+  #syncTracks(mediaStream, peerTracks, type) {
     const peerIds = peerTracks.map((track) => {
       return track.id;
     });
@@ -832,9 +846,8 @@ export default class lwpCall {
     mediaStream.getTracks().forEach((track) => {
       if (removeIds.includes(track.id)) {
         mediaStream.removeTrack(track);
-        this._emit(
+        this.#emit(
           type + "." + track.kind + ".removed",
-          this,
           lwpUtils.trackParameters(mediaStream, track)
         );
       }
@@ -842,19 +855,18 @@ export default class lwpCall {
     peerTracks.forEach((track) => {
       if (addIds.includes(track.id)) {
         mediaStream.addTrack(track);
-        this._emit(
+        this.#emit(
           type + "." + track.kind + ".added",
-          this,
           lwpUtils.trackParameters(mediaStream, track)
         );
       }
     });
   }
 
-  _connectStreams() {
-    Object.keys(this._streams).forEach((type) => {
-      const mediaStream = this._streams[type].mediaStream;
-      this._emit(type + ".mediaStream.connect", this, mediaStream);
+  #connectStreams() {
+    Object.keys(this.#streams).forEach((type) => {
+      const mediaStream = this.#streams[type].mediaStream;
+      this.#emit(type + ".mediaStream.connect", mediaStream);
     });
 
     if (!this.hasSession()) {
@@ -870,9 +882,9 @@ export default class lwpCall {
       });
     }
 
-    Object.keys(this._streams).forEach((type) => {
-      Object.keys(this._streams[type].elements).forEach((kind) => {
-        const element = this._streams[type].elements[kind];
+    Object.keys(this.#streams).forEach((type) => {
+      Object.keys(this.#streams[type].elements).forEach((kind) => {
+        const element = this.#streams[type].elements[kind];
         if (element && element.paused) {
           element.play().catch(() => {
             /*
@@ -888,15 +900,15 @@ export default class lwpCall {
              */
           });
         }
-        this._emit(type + "." + kind + ".connect", this, element);
+        this.#emit(type + "." + kind + ".connect", element);
       });
     });
   }
 
-  _disconnectStreams() {
-    Object.keys(this._streams).forEach((type) => {
-      const mediaStream = this._streams[type].mediaStream;
-      this._emit(type + ".mediaStream.disconnect", this, mediaStream);
+  #disconnectStreams() {
+    Object.keys(this.#streams).forEach((type) => {
+      const mediaStream = this.#streams[type].mediaStream;
+      this.#emit(type + ".mediaStream.disconnect", mediaStream);
     });
 
     if (!this.hasSession()) {
@@ -912,19 +924,19 @@ export default class lwpCall {
       });
     }
 
-    Object.keys(this._streams).forEach((type) => {
-      Object.keys(this._streams[type].elements).forEach((kind) => {
-        const element = this._streams[type].elements[kind];
+    Object.keys(this.#streams).forEach((type) => {
+      Object.keys(this.#streams[type].elements).forEach((kind) => {
+        const element = this.#streams[type].elements[kind];
         if (element && !element.paused) {
           element.pause();
         }
-        this._emit(type + "." + kind + ".disconnect", this, element);
+        this.#emit(type + "." + kind + ".disconnect", element);
       });
     });
   }
 
-  _destroyStreams() {
-    this._emit("ringing.stopped", this);
+  #destroyStreams() {
+    this.#emit("ringing.stopped");
 
     const peerConnection = this.getPeerConnection();
     if (peerConnection) {
@@ -933,6 +945,25 @@ export default class lwpCall {
           peer.track.stop();
         }
       });
+    }
+  }
+
+  #emit(type, ...data) {
+    data.unshift(this);
+    data.unshift(this.#libwebphone);
+    data.unshift("call." + type);
+
+    this.#libwebphone._emit.apply(this.#libwebphone, data);
+
+    if (this.isPrimary()) {
+      data.shift();
+      data.unshift("call.primary." + type);
+      this.#libwebphone._emit.apply(this.#libwebphone, data);
+
+      data.shift();
+      data.unshift("call.primary.update");
+      data.push(type);
+      this.#libwebphone._emit.apply(this.#libwebphone, data);
     }
   }
 }
